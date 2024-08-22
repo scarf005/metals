@@ -17,11 +17,11 @@ case class Snapshot(version: String, lastModified: LocalDateTime) {
 
 object Snapshot {
   private val zdtFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss zzz uuuu")
+    DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss zzz EEE")
   private val mavenMetadataLastUpdatedFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("uuuuMMddHHmmss")
   private val snapshotOutputFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("dd MMM uuuu HH:mm")
+    DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm")
   private implicit val localDateTimeOrdering: Ordering[LocalDateTime] =
     Ordering.fromLessThan[LocalDateTime]((a, b) => a.compareTo(b) < 0)
 
