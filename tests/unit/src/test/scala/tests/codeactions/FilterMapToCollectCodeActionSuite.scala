@@ -274,4 +274,23 @@ class FilterMapToCollectCodeActionSuite
        |""".stripMargin,
     selectedActionIndex = 2,
   )
+
+  val noActionCode = """|object Main {
+       |  case class Foo(a: Int) {
+       |    def filter(b: Int) = this
+       |    def map(b: Int) = this
+       |  }
+       |
+       |  val foo = Foo(1)
+       |  foo.fil<<>>ter((x: Int) => x > 2).map((x: Int) => x * 2)
+       |}
+       |"""
+  check(
+    "skips-non-stdlib-filter-type",
+    noActionCode.stripMargin,
+    s"""|${RewriteBracesParensCodeAction.toBraces("filter")}
+        |${FlatMapToForComprehensionCodeAction.flatMapToForComprehension}
+        |""".stripMargin,
+    noActionCode.replace("<<", "").replace(">>", ""),
+  )
 }

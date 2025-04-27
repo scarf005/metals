@@ -10,11 +10,13 @@ import scala.meta.internal.metals.codeactions.CodeAction
 import scala.meta.internal.metals.codeactions.CodeActionBuilder
 import scala.meta.internal.parsing.Trees
 import scala.meta.pc.CancelToken
+import scala.meta.internal.metals.Compilers
 
 import org.eclipse.lsp4j.CodeActionParams
 import org.eclipse.{lsp4j => l}
 
-class FilterMapToCollectCodeAction(trees: Trees) extends CodeAction {
+class FilterMapToCollectCodeAction(trees: Trees, compilers: Compilers)
+    extends CodeAction {
   override def kind: String = l.CodeActionKind.RefactorRewrite
 
   private case class FilterMapCollectParams(
@@ -51,28 +53,59 @@ class FilterMapToCollectCodeAction(trees: Trees) extends CodeAction {
 
   override def contribute(params: CodeActionParams, token: CancelToken)(implicit
       ec: ExecutionContext
-  ): Future[Seq[l.CodeAction]] = Future {
+  ): Future[Seq[l.CodeAction]] = {
     val uri = params.getTextDocument().getUri()
 
     val path = uri.toAbsolutePath
     val start = params.getRange.getStart
 
-    trees
+    val chain = trees
       .findLastEnclosingAt[Term.Apply](path, start)
       .flatMap(findFilterMapChain)
-      .map(_ => {
-        val data =
-          FilterMapCollectParams(
-            params.getTextDocument(),
-            start,
+
+    def getDefinition(term: Term) = {
+      val position = new l.Position(term.pos.startLine, term.pos.startColumn)
+      val positionParams =
+        new l.TextDocumentPositionParams(params.getTextDocument(), position)
+      val definition = compilers.definition(positionParams, token)
+      definition
+    }
+
+    chain match {
+      case Some(chain) =>
+        for {
+          filterResult <- getDefinition(chain.filterFn)
+          mapResult <- getDefinition(chain.mapFn)
+
+          _ = println(s"filterFn definition result: $filterResult")
+          _ = println(s"mapFn definition result: $mapResult")
+
+          filterInfo <- compilers.info(
+            filterResult.definition.get,
+            filterResult.symbol,
           )
-        CodeActionBuilder.build(
-          title = FilterMapToCollectCodeAction.title,
-          kind = this.kind,
-          data = Some(data.toJsonObject),
-        )
-      })
-      .toSeq
+          mapInfo <- compilers.info(
+            mapResult.definition.get,
+            mapResult.symbol,
+          )
+
+          _ = println(s"filterFn info result: $filterInfo")
+          _ = println(s"mapFn info result: $mapInfo")
+
+        } yield {
+          val data = FilterMapCollectParams(params.getTextDocument(), start)
+
+          val codeAction = CodeActionBuilder.build(
+            title = FilterMapToCollectCodeAction.title,
+            kind = this.kind,
+            data = Some(data.toJsonObject),
+          )
+          // Return the sequence containing the CodeAction
+          Seq(codeAction)
+        }
+
+      case None => Future.successful(Seq.empty)
+    }
   }
 
   private def toTextEdit(chain: FilterMapChain) = {
